@@ -1,0 +1,9 @@
+# Geheimnisse – niemals committen
+*.key
+*.pem
+.env
+*.secret
+vault_pass*
+# Systemkram
+.vscode/
+Thumbs.db
