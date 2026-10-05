@@ -3,7 +3,7 @@
 Proxmox-Homelab als Code: vom Bare-Metal-Host bis zur automatisierten, überwachten Umgebung mit CI.
 Alles, was sich als Code ablegen lässt, liegt in diesem Repo – nichts wird von Hand eingerichtet.
 
-![Status](https://img.shields.io/badge/Phase%201-Modul%201%20von%206-blue)
+![Status](https://img.shields.io/badge/Phase%201-Modul%202%20von%206-blue)
 
 ## Überblick
 
