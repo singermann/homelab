@@ -66,7 +66,86 @@ Beim ersten Start eines Klons liest cloud-init diese Werte und richtet das Syste
 
 ## Woche 5 – SSH härten und Firewall
 
-_folgt_
+### Ergebnis
+
+| | Debian (test-debian) | Rocky (test-rocky) |
+|---|---|---|
+| SSH | nur Key-Login, kein root, nur Benutzer `sven` | gleich |
+| Firewall | nftables, eigene Regeln | firewalld, Zone `public` |
+| Eingehend erlaubt | SSH, Ping, DHCP | SSH, DHCPv6-Client (Ping erlaubt firewalld standardmäßig) |
+
+Dateien im Repo:
+- [`ansible/files/ssh/10-hardening.conf`](../ansible/files/ssh/10-hardening.conf) – SSH-Härtung für beide Systeme
+- [`ansible/files/nftables/nftables.conf`](../ansible/files/nftables/nftables.conf) – Firewall-Regeln Debian
+
+In Modul 3 verteilt Ansible diese Dateien automatisch auf jede neue VM.
+
+### SSH-Härtung
+
+Eigene Datei in `/etc/ssh/sshd_config.d/` statt Änderung der Hauptdatei – Updates überschreiben sie nicht. Die Nummer `10-` ist wichtig: sshd übernimmt den **ersten** gefundenen Wert, Dateien werden alphabetisch gelesen.
+
+```bash
+sudo sshd -t                                   # Syntax prüfen
+sudo sshd -T | grep -E "permitrootlogin|allowusers"   # effektive Werte
+sudo systemctl reload ssh                      # Debian (Rocky: sshd)
+```
+
+### Firewall
+
+**Debian – nftables:** Standardregel `policy drop`, freigegeben wird nur, was nötig ist.
+
+```bash
+sudo nft -c -f /etc/nftables.conf      # prüfen
+sudo systemctl enable --now nftables   # aktivieren, auch nach Neustart
+```
+
+**Rocky – firewalld:** Zonen und Dienste statt eigener Regeln. Cockpit-Port geschlossen.
+
+```bash
+sudo dnf install -y firewalld
+sudo systemctl enable --now firewalld
+sudo firewall-cmd --permanent --remove-service=cockpit
+sudo firewall-cmd --reload
+```
+
+`--permanent` speichert, wirkt aber erst nach `--reload`. Ohne `--permanent` gilt eine Änderung nur bis zum Neustart.
+
+### Nachweis
+
+| Test | Debian | Rocky |
+|---|---|---|
+| Login als `sven` mit Key | ✅ | ✅ |
+| Passwort-Login | ❌ `Permission denied (publickey)` | ❌ |
+| Login als `root` | ❌ `Permission denied (publickey)` | ❌ |
+| Port 8080 mit Firewall / ohne / wieder mit | False → True → False | False → True → False |
+| Regeln nach Neustart vorhanden | ✅ | ✅ |
+
+Testablauf Port 8080 (komplett aus PowerShell):
+
+```powershell
+ssh -i $HOME\.ssh\homelab sven@<VM> "sudo systemd-run --unit=testweb python3 -m http.server 8080"
+Test-NetConnection <VM> -Port 8080 -InformationLevel Quiet          # False
+ssh -i $HOME\.ssh\homelab sven@<VM> "sudo systemctl stop nftables"  # Rocky: firewalld
+Test-NetConnection <VM> -Port 8080 -InformationLevel Quiet          # True
+ssh -i $HOME\.ssh\homelab sven@<VM> "sudo systemctl start nftables; sudo systemctl stop testweb"
+Test-NetConnection <VM> -Port 8080 -InformationLevel Quiet          # False
+```
+
+### Probleme und Lösungen
+
+| Problem | Ursache | Lösung |
+|---|---|---|
+| root kam trotz `PermitRootLogin no` noch rein (Meldung von cloud-init statt *Permission denied*) | Datei angelegt, aber sshd nicht neu geladen. `sshd -T` zeigt nur, was beim nächsten Laden gilt | `systemctl reload ssh`; im Journal belegt: `Accepted publickey for root` vor, `Received SIGHUP` nach dem Reload |
+| Passwort-Test war schon vor der Härtung „bestanden“ | Cloud Image hat Passwort-Login bereits deaktiviert | Test zählt nur zusammen mit `sshd -T` als Nachweis |
+| Port-Test zeigte *False*, bewies aber nichts | Webserver lief zum Testzeitpunkt nicht – ein Port ohne Dienst ist immer zu | Webserver per `systemd-run` als Dienst gestartet, Gegenprobe mit abgeschalteter Firewall |
+| Tests zuerst in der VM statt am PC ausgeführt | VM hat sich mit sich selbst verbunden | Eingabezeile prüfen: `PS C:\>` = PC, `sven@test-debian` = VM |
+| Rocky bot zusätzlich `gssapi-keyex,gssapi-with-mic` an | Kerberos-Anmeldung bei RHEL standardmäßig aktiv | `GSSAPIAuthentication no` ergänzt |
+
+### Gelernt
+
+- Ein Test kann aus dem falschen Grund grün sein – immer die Gegenprobe machen (mit/ohne Firewall).
+- Konfiguration schreiben ≠ Konfiguration aktiv. Erst `reload`, dann testen.
+- Beim Ändern von SSH oder Firewall immer einen Rettungsweg offen halten (zweite Sitzung, Proxmox-Konsole).
 
 ## Woche 6 – systemd und journalctl
 
