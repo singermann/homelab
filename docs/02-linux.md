@@ -227,9 +227,101 @@ Isolations-Test (`systemctl --failed` unter verschiedenen Bedingungen):
 | `journalctl -o cat` | nur der Text |
 | `journalctl -u ssh --since today -o cat \| grep -E "Accepted\|not allowed"` | erfolgreiche und abgewiesene SSH-Logins |
 
-## Woche 7 – SELinux-Grundlagen
+## Woche 7 – SELinux-Grundlagen ✅
 
-_folgt_
+### Wie SELinux denkt
+
+Dateirechte (`rwx`) fragen: *Wer* darf zugreifen? SELinux fragt zusätzlich: *Welcher Prozess* darf *welche Art von Datei oder Port* wie nutzen? Dafür trägt alles ein Label (Typ):
+
+| Objekt | Beispiel-Typ |
+|---|---|
+| Prozess systemd | `init_t` |
+| Prozess sshd | `sshd_t` |
+| Programmdatei in `/usr/local/bin` | `bin_t` |
+| Datei aus einem Home-Verzeichnis | `user_home_t` |
+| SSH-Port | `ssh_port_t` |
+
+Fehlt eine erlaubende Regel, wird blockiert – auch für root.
+
+```bash
+getenforce                  # Enforcing / Permissive / Disabled
+ls -Z <datei>               # Label einer Datei
+ps -eZ | grep sshd          # Label eines Prozesses
+sudo ausearch -m avc -ts recent          # Blockaden der letzten Minuten
+sudo ausearch -m avc -ts recent | audit2why   # Erklärung
+```
+
+### Übung 1 – Falsches Datei-Label durch `mv`
+
+**Provoziert:** Skript ins Home-Verzeichnis kopiert und per `mv` zurück nach `/usr/local/bin` verschoben.
+
+**Symptom:** `homelab-health.service` scheitert mit `status=203/EXEC` – obwohl die Dateirechte `rwxr-xr-x` korrekt sind.
+
+**Ursache (Audit-Log):**
+
+```
+avc: denied { execute } … comm="(b-health)"
+scontext=system_u:system_r:init_t:s0
+tcontext=unconfined_u:object_r:user_home_t:s0 tclass=file permissive=0
+uid=0
+```
+
+systemd (`init_t`) darf keine Datei mit Label `user_home_t` ausführen. `mv` behält Label **und Besitzer** (`sven`) der Quelle bei.
+
+**Lösung:**
+
+```bash
+sudo restorecon -v /usr/local/bin/homelab-health   # user_home_t -> bin_t
+sudo chown root:root /usr/local/bin/homelab-health
+```
+
+`chown` ist zusätzlich nötig: Sonst könnte `sven` ein Skript ändern, das systemd regelmäßig ausführt.
+
+### Übung 2 – Dienst auf nicht vorgesehenem Port
+
+**Provoziert:** sshd zusätzlich auf Port 2222 (`/etc/ssh/sshd_config.d/20-port.conf` mit `Port 22` und `Port 2222`).
+
+**Symptom:** `sshd -t` meldet keinen Fehler (prüft kein SELinux), `ss -tlnp` zeigt aber nur Port 22. Journal: `Bind to port 2222 on 0.0.0.0 failed: Permission denied.`
+
+**Ursache:**
+
+```
+avc: denied { name_bind } … src=2222
+scontext=system_u:system_r:sshd_t:s0-s0:c0.c1023
+tcontext=system_u:object_r:unreserved_port_t:s0 tclass=tcp_socket
+```
+
+**Lösung:** Port mit dem passenden Typ kennzeichnen, danach zusätzlich die Firewall öffnen – zwei unabhängige Schutzschichten.
+
+```bash
+sudo semanage port -a -t ssh_port_t -p tcp 2222   # SELinux
+sudo systemctl reload sshd
+sudo firewall-cmd --permanent --add-port=2222/tcp  # firewalld
+sudo firewall-cmd --reload
+```
+
+Danach lauschte sshd auf 22 und 2222. Anschließend alles zurückgebaut (`semanage port -d`, `--remove-port`, Konfigurationsdatei gelöscht).
+
+### Welche Lösung wann?
+
+| Situation | Richtige Lösung |
+|---|---|
+| Datei hat falsches Label | `restorecon` |
+| Datei liegt an ungewöhnlichem Ort | `semanage fcontext -a` + `restorecon` |
+| Dienst nutzt ungewöhnlichen Port | `semanage port -a` |
+| Vorgesehene Option abgeschaltet | `setsebool -P` |
+| Nichts davon passt | erst dann `audit2allow` – nach genauer Prüfung |
+
+`audit2why` schlug in Übung 1 `audit2allow` vor. Das wäre falsch gewesen: Eine neue Regel „systemd darf Home-Dateien ausführen“ hätte eine Sicherheitslücke geöffnet. Die Frage ist immer: **Ist die Regel falsch – oder das Label?**
+
+`setenforce 0` dient nur als Gegenprobe, nie als Lösung.
+
+### Gelernt
+
+- 203/EXEC bei korrekten Dateirechten → an SELinux denken, `ausearch -m avc` prüfen.
+- `install` oder `cp` statt `mv`, wenn Dateien in Systemverzeichnisse kommen.
+- Eine erfolgreiche Syntaxprüfung (`sshd -t`) heißt nicht, dass der Dienst tut, was er soll – Ergebnis prüfen (`ss -tlnp`).
+- SELinux und Firewall sind getrennte Schichten; beide müssen passen.
 
 ## Befehlsübersicht
 

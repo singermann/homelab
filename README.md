@@ -65,8 +65,8 @@ homelab/
 | # | Modul | Zeitraum | Status | Ergebnis |
 |---|---|---|---|---|
 | 1 | Fundament und Git | Woche 1–3 | ✅ fertig | Proxmox läuft, NAS eingebunden, Repo online – [Doku](docs/01-fundament.md) |
-| 2 | Linux-Fundament | Woche 4–7 | 🟡 in Arbeit | VM-Templates per Skript – [Doku](docs/02-linux.md) |
-| 3 | Automatisierung mit Ansible | Woche 8–11 | ⚪ offen | neue VM in < 10 Min. per Playbook |
+| 2 | Linux-Fundament | Woche 4–7 | ✅ fertig | Templates, SSH-Härtung, Firewall, systemd-Dienst, SELinux – [Doku](docs/02-linux.md) |
+| 3 | Automatisierung mit Ansible | Woche 8–11 | 🟡 in Arbeit | neue VM in < 10 Min. per Playbook |
 | 4 | Container mit Docker | Woche 12–15 | ⚪ offen | Nextcloud + Paperless-ngx mit TLS |
 | 5 | Monitoring | Woche 16–19 | ⚪ offen | Grafana-Dashboard, Alarme per Mail |
 | 6 | Backup, Restore und CI | Woche 20–26 | ⚪ offen | getesteter Restore, GitHub-Actions-Pipeline |
@@ -77,8 +77,10 @@ Legende: ✅ fertig · 🟡 in Arbeit · ⚪ offen
 
 <!-- Je Modul 2–3 Sätze: Welches Problem trat auf, wie wurde es gelöst? -->
 
-- **Modul 1:** Proxmox ohne Subscription aktuell halten, NAS per NFS einbinden, Git-Workflow mit Branch und Pull Request.
-- **Modul 2:** Templates mit cloud-init; Skripte brechen bei Fehlern sofort ab, statt still weiterzulaufen.
+- **Modul 1:** 	Proxmox ohne Subscription aktuell gehalten, NAS per NFS eingebunden. Ein vergessenes Root-Passwort über GRUB zurückgesetzt, 
+				einen abgelehnten `git push` (non-fast-forward) analysiert und gelöst – seitdem läuft jede Änderung über Branch und Pull Request.
+- **Modul 2:** 	Ein still fehlgeschlagener Befehl blieb beim Template-Bau zwei Schritte lang unbemerkt – seitdem brechen Skripte bei Fehlern 
+				sofort ab und prüfen ihr Ergebnis. Einen systemd-Dienst, der unter `DynamicUser` scheiterte, per Isolations-Test eingegrenzt statt geraten. SELinux-Blockaden über das Audit-Log gefunden und mit `restorecon` bzw. `semanage` gelöst, statt SELinux abzuschalten.
 
 ## Sicherheit
 
