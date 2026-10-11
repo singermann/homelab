@@ -64,7 +64,7 @@ Beim ersten Start eines Klons liest cloud-init diese Werte und richtet das Syste
 - Erst prüfen (`qm config`, `qemu-img info`, `cat`), dann weitermachen.
 - Ein Template ist ein Bauplan, keine VM – gestartet werden nur Klone.
 
-## Woche 5 – SSH härten und Firewall
+## Woche 5 – SSH härten und Firewall ✅
 
 ### Ergebnis
 
@@ -147,9 +147,85 @@ Test-NetConnection <VM> -Port 8080 -InformationLevel Quiet          # False
 - Konfiguration schreiben ≠ Konfiguration aktiv. Erst `reload`, dann testen.
 - Beim Ändern von SSH oder Firewall immer einen Rettungsweg offen halten (zweite Sitzung, Proxmox-Konsole).
 
-## Woche 6 – systemd und journalctl
+## Woche 6 – systemd und journalctl ✅
 
-_folgt_
+### Ergebnis
+
+Eigener Dienst `homelab-health`: prüft alle 15 Minuten Plattenbelegung, Arbeitsspeicher und fehlgeschlagene Dienste und schreibt das Ergebnis mit Priorität ins Journal. Läuft auf Debian und Rocky.
+
+| Teil | Datei im Repo | Ziel auf dem Server |
+|---|---|---|
+| Skript | [`scripts/homelab-health.sh`](../scripts/homelab-health.sh) | `/usr/local/bin/homelab-health` |
+| Service | [`ansible/files/systemd/homelab-health.service`](../ansible/files/systemd/homelab-health.service) | `/etc/systemd/system/` |
+| Timer | [`ansible/files/systemd/homelab-health.timer`](../ansible/files/systemd/homelab-health.timer) | `/etc/systemd/system/` |
+
+### Aufbau
+
+- **Service** (`Type=oneshot`): *wie* das Skript läuft – eigener Systembenutzer, nur Lesezugriff (`ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `NoNewPrivileges=yes`).
+- **Timer** (`OnCalendar=*:0/15`, `Persistent=true`): *wann* es läuft – moderner Ersatz für cron, verpasste Läufe werden nachgeholt.
+- **Prioritäten:** Zeilen mit `<4>` werden im Journal zur Warnung, `<6>` zur Info. Dadurch filtert `journalctl -p warning` nur die Probleme heraus.
+
+### Installation (Rocky, aus dem Repo)
+
+```bash
+git clone https://github.com/singermann/homelab.git && cd homelab
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin homelab-health
+sudo install -m 755 scripts/homelab-health.sh /usr/local/bin/homelab-health
+sudo install -m 644 ansible/files/systemd/homelab-health.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now homelab-health.timer
+```
+
+`install` statt `mv`: legt eine neue Datei an, die das richtige SELinux-Label des Zielordners erhält (`bin_t`, `systemd_unit_file_t`). Geprüft mit `ls -Z`, `ausearch -m avc` ohne Treffer.
+
+### Nachweis
+
+| Test | Debian | Rocky |
+|---|---|---|
+| Manueller Start, `status=0/SUCCESS` | ✅ | ✅ |
+| Timer aktiv (`systemctl list-timers`) | ✅ | ✅ |
+| Warnung provoziert (`THRESHOLD=1`), `journalctl -p warning` zeigt nur Warnzeilen | ✅ | – |
+| Keine SELinux-Blockaden | – | ✅ |
+
+### Probleme und Lösungen
+
+| Problem | Ursache | Lösung |
+|---|---|---|
+| Dienst brach nach der RAM-Zeile ab, `status=1/FAILURE`, keine Fehlermeldung | `systemctl --failed` scheiterte unter `DynamicUser=yes`: *Transport endpoint is not connected*; `set -euo pipefail` brach still ab | Systematisch isoliert (siehe unten), fester Systembenutzer `homelab-health` statt `DynamicUser` |
+| Hypothese „`libnss-systemd` fehlt“ | Paket installiert, Fehler blieb → **widerlegt** | Isolations-Test mit drei Varianten |
+| Check meldete sich selbst als fehlgeschlagen | Alter Fehlerstatus von `homelab-health.service` | `systemctl reset-failed homelab-health.service` |
+| Warnungstest zeigte zuerst nichts | `systemd-run` ohne `--wait` kehrt sofort zurück, `journalctl` prüfte zu früh | Erneut abgefragt bzw. `--wait` |
+| Zeile für `/` fehlte auf Rocky | `journalctl -n 6` zeigt nur die letzten 6 Zeilen, Rocky hat eine Partition mehr | `-n 10` |
+| `/boot` auf Rocky zu 69 % belegt | Kleine eigene Partition (936 MB), dnf behält bis zu 3 Kernel | `installonly_limit=2` in `/etc/dnf/dnf.conf` – **erster echter Fund des Checks** |
+
+Isolations-Test (`systemctl --failed` unter verschiedenen Bedingungen):
+
+| Variante | Exit-Code |
+|---|---|
+| A: `User=nobody`, ohne Härtung | 0 |
+| B: `DynamicUser=yes` | 1 – *Transport endpoint is not connected* |
+| C: `User=homelab-health` mit voller Härtung | 0 |
+
+→ Nur der temporäre Benutzer wird von D-Bus abgewiesen, die Härtungsoptionen sind unproblematisch.
+
+### Gelernt
+
+- Fehler eingrenzen statt raten: Hypothese aufstellen, testen, bei Widerlegung systematisch isolieren.
+- `set -e` bricht still ab – Prüfungen, die scheitern dürfen, gezielt abfangen und als Warnung melden.
+- Nach jeder Änderung an Unit-Dateien `systemctl daemon-reload`.
+- Ein Test muss *nach* dem Ereignis prüfen (Timing bei Hintergrundprozessen).
+
+### journalctl-Spickzettel
+
+| Befehl | Zeigt |
+|---|---|
+| `journalctl -u <dienst>` | Meldungen eines Dienstes |
+| `journalctl -p warning` | nur Warnungen und Schlimmeres |
+| `journalctl --since "1 hour ago"` | Zeitraum |
+| `journalctl -b` | seit dem letzten Start |
+| `journalctl -f` | live mitlesen |
+| `journalctl -o cat` | nur der Text |
+| `journalctl -u ssh --since today -o cat \| grep -E "Accepted\|not allowed"` | erfolgreiche und abgewiesene SSH-Logins |
 
 ## Woche 7 – SELinux-Grundlagen
 
