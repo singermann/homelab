@@ -1,0 +1,12 @@
+# Ziel: /etc/systemd/system/homelab-health.timer
+# Aktivieren: systemctl enable --now homelab-health.timer
+[Unit]
+Description=Homelab Systemcheck alle 15 Minuten
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target
