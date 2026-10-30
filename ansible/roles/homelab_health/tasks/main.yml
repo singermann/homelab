@@ -1,0 +1,36 @@
+---
+- name: Systembenutzer anlegen
+  ansible.builtin.user:
+    name: homelab-health
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Prüfskript ablegen
+  ansible.builtin.copy:
+    src: homelab-health.sh
+    dest: /usr/local/bin/homelab-health
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Service und Timer ablegen
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - homelab-health.service
+    - homelab-health.timer
+  notify: systemd neu laden
+
+- name: Ausstehende Handler jetzt ausführen
+  ansible.builtin.meta: flush_handlers
+
+- name: Timer aktivieren und starten
+  ansible.builtin.systemd_service:
+    name: homelab-health.timer
+    enabled: true
+    state: started

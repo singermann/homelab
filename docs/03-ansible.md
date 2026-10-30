@@ -91,9 +91,40 @@ Entwickelt wird direkt im Ansible-Container. Push nach GitHub über einen Deploy
 - `changed=0` beim ersten Lauf beweist keine Idempotenz. Der Nachweis braucht einen Lauf mit Änderung und einen ohne.
 - `ansible.builtin.package` wählt apt oder dnf automatisch, Unterschiede zwischen Systemen gehören in `group_vars`.
 
-## Woche 10 – Rollen
+## Woche 10 – Rollen ✅
 
-_folgt_
+### Ergebnis
+
+Die Handarbeit aus Modul 2 ist jetzt in drei Rollen verpackt, zusammengeführt in [`playbooks/site.yml`](../ansible/playbooks/site.yml):
+
+| Rolle | Aufgabe | Besonderheit |
+|---|---|---|
+| [`ssh_hardening`](../ansible/roles/ssh_hardening/) | SSH-Härtung verteilen | `validate: sshd -t` prüft vor dem Einspielen; Handler lädt `ssh` (Debian) bzw. `sshd` (Rocky) neu |
+| [`firewall`](../ansible/roles/firewall/) | nftables (Debian), firewalld (Rocky) | `include_tasks` je Betriebssystem; erlaubte Dienste über `defaults`, überschreibbar per `group_vars` |
+| [`homelab_health`](../ansible/roles/homelab_health/) | Benutzer, Skript, Service, Timer | `flush_handlers`, damit systemd die Units vor dem Timer-Start kennt |
+
+```bash
+ansible-playbook playbooks/site.yml   # Grundausstattung + alle Rollen
+```
+
+### Nachweis
+
+| Rolle | 1. Lauf | 2. Lauf |
+|---|---|---|
+| ssh_hardening | changed=2 je VM (Datei + Handler) | changed=0, Handler läuft nicht |
+| firewall | Debian changed=2, Rocky changed=0 | changed=0 |
+| homelab_health | Debian changed=2, Rocky changed=0 | changed=0 |
+
+Gegenproben: `sshd -T` zeigt `permitrootlogin no` / `gssapiauthentication no`, Firewall-Regeln aktiv, Timer `active`, SELinux-Label des Skripts auf Rocky `bin_t`.
+
+Die erste Ausführung hat Abweichungen aus der Handarbeit sichtbar gemacht – z. B. stand `GSSAPIAuthentication no` durch `tee -a` am Dateiende statt an der vorgesehenen Stelle.
+
+### Gelernt
+
+- Handler reagieren nur auf echte Änderungen – das vergessene `reload` aus Woche 5 kann nicht mehr passieren.
+- `validate` verhindert, dass eine fehlerhafte Konfiguration einen Dienst lahmlegt oder aussperrt.
+- Eine Rolle kann mehrere Betriebssysteme bedienen; Unterschiede stecken in getrennten Task-Dateien.
+- Ansible setzt beim Kopieren das passende SELinux-Label – das `mv`-Problem aus Woche 7 tritt nicht auf.
 
 ## Woche 11 – Ansible Vault und Gesamttest
 

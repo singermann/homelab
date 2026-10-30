@@ -1,0 +1,8 @@
+---
+# Rocky/firewalld: erlaubte Dienste in der Zone public
+firewall_allowed_services:
+  - ssh
+  - dhcpv6-client
+# Rocky/firewalld: ausdrücklich geschlossene Dienste
+firewall_blocked_services:
+  - cockpit

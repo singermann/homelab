@@ -1,0 +1,12 @@
+---
+# Gesamt-Playbook: richtet jede VM vollständig ein
+- name: Grundausstattung
+  ansible.builtin.import_playbook: base.yml
+
+- name: Härtung und Dienste
+  hosts: homelab
+  become: true
+  roles:
+    - ssh_hardening
+    - firewall
+    - homelab_health
