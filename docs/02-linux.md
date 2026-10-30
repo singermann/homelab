@@ -75,8 +75,8 @@ Beim ersten Start eines Klons liest cloud-init diese Werte und richtet das Syste
 | Eingehend erlaubt | SSH, Ping, DHCP | SSH, DHCPv6-Client (Ping erlaubt firewalld standardmäßig) |
 
 Dateien im Repo:
-- [`ansible/files/ssh/10-hardening.conf`](../ansible/files/ssh/10-hardening.conf) – SSH-Härtung für beide Systeme
-- [`ansible/files/nftables/nftables.conf`](../ansible/files/nftables/nftables.conf) – Firewall-Regeln Debian
+- [`ansible/roles/ssh_hardening/files/10-hardening.conf`](../ansible/roles/ssh_hardening/files/10-hardening.conf) – SSH-Härtung für beide Systeme
+- [`ansible/roles/firewall/files/nftables.conf`](../ansible/roles/firewall/files/nftables.conf) – Firewall-Regeln Debian
 
 In Modul 3 verteilt Ansible diese Dateien automatisch auf jede neue VM.
 
@@ -155,9 +155,9 @@ Eigener Dienst `homelab-health`: prüft alle 15 Minuten Plattenbelegung, Arbeits
 
 | Teil | Datei im Repo | Ziel auf dem Server |
 |---|---|---|
-| Skript | [`scripts/homelab-health.sh`](../scripts/homelab-health.sh) | `/usr/local/bin/homelab-health` |
-| Service | [`ansible/files/systemd/homelab-health.service`](../ansible/files/systemd/homelab-health.service) | `/etc/systemd/system/` |
-| Timer | [`ansible/files/systemd/homelab-health.timer`](../ansible/files/systemd/homelab-health.timer) | `/etc/systemd/system/` |
+| Skript | [`ansible/roles/homelab_health/files/homelab-health.sh`](../ansible/roles/homelab_health/files/homelab-health.sh) | `/usr/local/bin/homelab-health` |
+| Service | [`ansible/roles/homelab_health/files/homelab-health.service`](../ansible/roles/homelab_health/files/homelab-health.service) | `/etc/systemd/system/` |
+| Timer | [`ansible/roles/homelab_health/files/homelab-health.timer`](../ansible/roles/homelab_health/files/homelab-health.timer) | `/etc/systemd/system/` |
 
 ### Aufbau
 
@@ -170,8 +170,8 @@ Eigener Dienst `homelab-health`: prüft alle 15 Minuten Plattenbelegung, Arbeits
 ```bash
 git clone https://github.com/singermann/homelab.git && cd homelab
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin homelab-health
-sudo install -m 755 scripts/homelab-health.sh /usr/local/bin/homelab-health
-sudo install -m 644 ansible/files/systemd/homelab-health.{service,timer} /etc/systemd/system/
+sudo install -m 755 ansible/roles/homelab_health/files/homelab-health.sh /usr/local/bin/homelab-health
+sudo install -m 644 ansible/roles/homelab_health/files/homelab-health.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now homelab-health.timer
 ```
