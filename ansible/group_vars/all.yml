@@ -1,0 +1,9 @@
+---
+# Gilt für alle Hosts
+base_packages:
+  - curl
+  - git
+  - tmux
+  - tree
+  - bash-completion
+system_timezone: Europe/Berlin

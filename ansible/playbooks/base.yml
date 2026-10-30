@@ -1,0 +1,24 @@
+---
+- name: Grundausstattung
+  hosts: homelab
+  become: true
+
+  tasks:
+    - name: Basispakete und Editor installieren
+      ansible.builtin.package:
+        name: "{{ base_packages + [editor_package] }}"
+        state: present
+
+    - name: Zeitzone setzen
+      community.general.timezone:
+        name: "{{ system_timezone }}"
+
+    - name: Login-Hinweis setzen
+      ansible.builtin.copy:
+        dest: /etc/motd
+        content: |
+          {{ inventory_hostname }} – verwaltet mit Ansible.
+          Änderungen von Hand werden beim nächsten Lauf überschrieben.
+        owner: root
+        group: root
+        mode: "0644"
