@@ -53,9 +53,43 @@ ansible homelab -b -m command -a 'systemctl is-active homelab-health.timer'  # a
 - `command` meldet immer `CHANGED`, weil Ansible nicht weiß, ob ein beliebiger Befehl etwas verändert. Module wie `apt`, `dnf`, `copy` oder `service` prüfen dagegen den Ist-Zustand und ändern nur, wenn nötig (Idempotenz) – darum geht es ab Woche 9.
 - Ein eigener Schlüssel für Ansible trennt Automatisierung von persönlichem Zugang.
 
-## Woche 9 – Erste Playbooks
 
-_folgt_
+## Woche 9 – Erste Playbooks ✅
+
+### Ergebnis
+
+| Playbook | Aufgabe |
+|---|---|
+| [`playbooks/update.yml`](../ansible/playbooks/update.yml) | Updates auf allen VMs (apt bzw. dnf, per `when` nach Betriebssystem) |
+| [`playbooks/base.yml`](../ansible/playbooks/base.yml) | Grundausstattung: Basispakete, Editor, Zeitzone, Login-Hinweis |
+
+Variablen je Gruppe in [`ansible/group_vars/`](../ansible/group_vars/): `all.yml` für alle, `debian.yml` und `rocky.yml` für Unterschiede – z. B. heißt der Editor auf Debian `vim`, auf Rocky `vim-enhanced`.
+
+### Arbeitsweise
+
+```bash
+ansible-playbook playbooks/base.yml --syntax-check   # Schreibweise prüfen
+ansible-playbook playbooks/base.yml --check --diff   # Probelauf, zeigt Änderungen
+ansible-playbook playbooks/base.yml                  # ausführen
+```
+
+Entwickelt wird direkt im Ansible-Container. Push nach GitHub über einen Deploy Key mit Schreibrecht, der nur für dieses Repo gilt.
+
+### Nachweis Idempotenz
+
+| Lauf | test-debian | test-rocky |
+|---|---|---|
+| 1. Lauf | changed=3 | changed=3 |
+| 2. Lauf | changed=0 | changed=0 |
+| nach Handänderung an `/etc/motd` (nur test-debian) | changed=1 | changed=0 |
+| erneuter Lauf | changed=0 | changed=0 |
+
+### Gelernt
+
+- Ein Playbook beschreibt einen Zielzustand, keine Befehlsfolge. Ist der Zustand erreicht, tut Ansible nichts.
+- Abweichungen von Hand werden erkannt und zurückgesetzt – der Stand im Repo gewinnt.
+- `changed=0` beim ersten Lauf beweist keine Idempotenz. Der Nachweis braucht einen Lauf mit Änderung und einen ohne.
+- `ansible.builtin.package` wählt apt oder dnf automatisch, Unterschiede zwischen Systemen gehören in `group_vars`.
 
 ## Woche 10 – Rollen
 
